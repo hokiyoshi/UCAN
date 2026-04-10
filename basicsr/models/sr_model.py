@@ -35,6 +35,7 @@ class SRModel(BaseModel):
     def init_training_settings(self):
         self.net_g.train()
         train_opt = self.opt['train']
+        self.reset_momentum_iter = self.opt['train'].get('reset_momentum_iter', None)
 
         self.ema_decay = train_opt.get('ema_decay', 0)
         if self.ema_decay > 0:
@@ -63,13 +64,60 @@ class SRModel(BaseModel):
         else:
             self.cri_perceptual = None
 
-        if self.cri_pix is None and self.cri_perceptual is None:
-            raise ValueError('Both pixel and perceptual losses are None.')
+        if train_opt.get('swt_opt'):
+            self.cri_swt = build_loss(train_opt['swt_opt']).to(self.device)
+        else:
+            self.cri_swt = None
+
+        # mssim loss
+        if train_opt.get("mssim_opt"):
+            self.cri_mssim = build_loss(train_opt['mssim_opt']).to(self.device)
+        else:
+            self.cri_mssim = None
+
+        # ldl loss
+        if train_opt.get("ldl_opt"):
+            self.cri_ldl = build_loss(train_opt['ldl_opt']).to(self.device)
+        else:
+            self.cri_ldl = None
+
+        # consistency loss
+        if train_opt.get("consistency_opt"):
+            self.cri_consistency = build_loss(train_opt['consistency_opt']).to(self.device)
+        else:
+            self.cri_consistency = None
+        
+
+        if train_opt.get("dists_opt"):
+            self.cri_dists = build_loss(train_opt['dists_opt']).to(self.device)
+        else:
+            self.cri_dists = None
+
+        # fdl perceptual loss
+        if train_opt.get("fdl_opt"):
+            self.cri_fdl = build_loss(train_opt['fdl_opt']).to(self.device)
+        else:
+            self.cri_fdl = None
+
+        # focal-frequency loss
+        if train_opt.get("ff_opt"):
+            self.cri_ff = build_loss(train_opt['ff_opt']).to(self.device)
+        else:
+            self.cri_ff = None
+            
+        # if self.cri_pix is None and self.cri_perceptual is None:
+        #     raise ValueError('Both pixel and perceptual losses are None.')
 
         # set up optimizers and schedulers
         self.setup_optimizers()
         self.setup_schedulers()
-
+    
+    def reset_momentums(self):
+        for w in self.optimizer_g.state_dict()['state'].values():
+            w['step'] = torch.zeros_like(w['step'])
+            w['exp_avg'] = torch.zeros_like(w['exp_avg'])
+            w['exp_avg_sq'] = torch.zeros_like(w['exp_avg_sq'])
+    
     def setup_optimizers(self):
         train_opt = self.opt['train']
         optim_params = []
@@ -100,6 +148,38 @@ class SRModel(BaseModel):
             l_pix = self.cri_pix(self.output, self.gt)
             l_total += l_pix
             loss_dict['l_pix'] = l_pix
+            
+        # ssim loss
+        if self.cri_mssim:
+            l_g_mssim = self.cri_mssim(self.output, self.gt)
+            l_total += l_g_mssim
+            loss_dict["l_g_mssim"] = l_g_mssim
+            
+        # swt loss
+        if self.cri_swt:
+            l_swt = self.cri_swt(self.output, self.gt)
+            # print("SWT loss: ", l_swt)
+            l_total += l_swt
+            loss_dict['l_swt'] = l_swt 
+
+        # ldl loss
+        if self.cri_ldl:
+            l_g_ldl = self.cri_ldl(self.output, self.gt)
+            l_total += l_g_ldl
+            loss_dict["l_g_ldl"] = l_g_ldl
+
+        # consistency loss
+        if self.cri_consistency:
+            l_g_consistency = self.cri_consistency(self.output, self.gt)
+            l_total += l_g_consistency
+            loss_dict["l_g_consistency"] = l_g_consistency
+
+        # dists loss
+        if self.cri_dists:
+            l_g_dists = self.cri_dists(self.output, self.gt)
+            l_total += l_g_dists
+            loss_dict["l_g_dists"] = l_g_dists
+                
         # perceptual loss
         if self.cri_perceptual:
             l_percep, l_style = self.cri_perceptual(self.output, self.gt)
@@ -110,6 +190,17 @@ class SRModel(BaseModel):
                 l_total += l_style
                 loss_dict['l_style'] = l_style
 
+        if self.cri_fdl:
+            l_g_fdl = self.cri_fdl(self.output, self.gt)
+            l_total += l_g_fdl
+            loss_dict["l_g_fdl"] = l_g_fdl
+
+        # focal frequency loss
+        if self.cri_ff:
+            l_g_ff = self.cri_ff(self.output, self.gt)
+            l_total += l_g_ff
+            loss_dict["l_g_ff"] = l_g_ff
+
         l_total.backward()
         self.optimizer_g.step()
 
@@ -117,6 +208,12 @@ class SRModel(BaseModel):
 
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)
+
+        if self.reset_momentum_iter is not None:
+            if current_iter % self.reset_momentum_iter == 0:
+                logger = get_root_logger()
+                logger.info(f'Reset momentums for net_g at iteration {current_iter}')
+                self.reset_momentums()
 
     def test(self):
         if hasattr(self, 'net_g_ema'):
@@ -129,6 +226,54 @@ class SRModel(BaseModel):
                 self.output = self.net_g(self.lq)
             self.net_g.train()
 
+    def test_selfensemble(self):
+        # TODO: to be tested
+        # 8 augmentations
+        # modified from https://github.com/thstkdgus35/EDSR-PyTorch
+
+        def _transform(v, op):
+            # if self.precision != 'single': v = v.float()
+            v2np = v.data.cpu().numpy()
+            if op == 'v':
+                tfnp = v2np[:, :, :, ::-1].copy()
+            elif op == 'h':
+                tfnp = v2np[:, :, ::-1, :].copy()
+            elif op == 't':
+                tfnp = v2np.transpose((0, 1, 3, 2)).copy()
+
+            ret = torch.Tensor(tfnp).to(self.device)
+            # if self.precision == 'half': ret = ret.half()
+
+            return ret
+
+        # prepare augmented data
+        lq_list = [self.lq]
+        for tf in 'v', 'h', 't':
+            lq_list.extend([_transform(t, tf) for t in lq_list])
+
+        # inference
+        if hasattr(self, 'net_g_ema'):
+            self.net_g_ema.eval()
+            with torch.no_grad():
+                out_list = [self.net_g_ema(aug) for aug in lq_list]
+        else:
+            self.net_g.eval()
+            with torch.no_grad():
+                out_list = [self.net_g_ema(aug) for aug in lq_list]
+            self.net_g.train()
+
+        # merge results
+        for i in range(len(out_list)):
+            if i > 3:
+                out_list[i] = _transform(out_list[i], 't')
+            if i % 4 > 1:
+                out_list[i] = _transform(out_list[i], 'h')
+            if (i % 4) % 2 == 1:
+                out_list[i] = _transform(out_list[i], 'v')
+        output = torch.cat(out_list, dim=0)
+
+        self.output = output.mean(dim=0, keepdim=True)
+        
     def dist_validation(self, dataloader, current_iter, tb_logger, save_img):
         if self.opt['rank'] == 0:
             self.nondist_validation(dataloader, current_iter, tb_logger, save_img)

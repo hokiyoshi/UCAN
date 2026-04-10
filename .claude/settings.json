@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(nvidia-smi)",
+      "Bash(ls d:/CVPR/UCAN/basicsr/archs/*.py)",
+      "Bash(ls -la /d/CVPR/UCAN/basicsr/data/*.py)",
+      "Bash(ls -la /d/CVPR/UCAN/basicsr/archs/*.py)"
+    ]
+  }
+}

@@ -1,0 +1,92 @@
+# general settings
+name: UCAN_x3
+model_type: UCANModel
+scale: 3
+num_gpu: 1
+manual_seed: 2510
+
+datasets:
+  test_1:
+    name: Set5
+    type: PairedImageDataset
+    dataroot_gt: datasets/SR/Set5/HR
+    dataroot_lq: datasets/SR/Set5/LR_bicubic/X3
+    filename_tmpl: '{}x3'
+    io_backend:
+      type: disk
+
+  test_2:
+    name: Set14
+    type: PairedImageDataset
+    dataroot_gt: datasets/SR/Set14/HR
+    dataroot_lq: datasets/SR/Set14/LR_bicubic/X3
+    filename_tmpl: '{}x3'
+    io_backend:
+      type: disk
+
+  test_3:
+    name: B100
+    type: PairedImageDataset
+    dataroot_gt: datasets/SR/B100/HR
+    dataroot_lq: datasets/SR/B100/LR_bicubic/X3
+    filename_tmpl: '{}x3'
+    io_backend:
+      type: disk
+
+  test_4:
+    name: Urban100
+    type: PairedImageDataset
+    dataroot_gt: datasets/SR/Urban100/HR
+    dataroot_lq: datasets/SR/Urban100/LR_bicubic/X3
+    filename_tmpl: '{}x3'
+    io_backend:
+      type: disk
+
+  test_5:
+    name: Manga109
+    type: PairedImageDataset
+    dataroot_gt: datasets/SR/Manga109/HR
+    dataroot_lq: datasets/SR/Manga109/LR_bicubic/X3
+    filename_tmpl: '{}_LRBI_x3'
+    io_backend:
+      type: disk
+
+# network structure
+network_g:
+  type: UCAN
+  upscale: 3
+  in_chans: 3
+  img_size: 64
+  img_range: 1.
+  window_size: 16
+  conv_depth: 5
+  share: ['N', 'F', 'N', 'F']
+  embed_dim: 48
+  mlp_ratio: 1
+  mhsa_num_heads: 2
+  dfl_num_heads: 1
+  use_checkpoint: False
+  upsampler: 'pixelshuffledirect'
+  resi_connection: '1conv'
+
+# path
+path:
+  pretrain_network_g: experiments/pretrained_models/weight_final_x3.pth
+  strict_load_g: True
+  param_key_g: params_ema
+
+# validation settings
+val:
+  save_img: True
+  suffix: ~
+  use_chop: False
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 3
+      test_y_channel: True
+    ssim:
+      type: calculate_ssim
+      crop_border: 3
+      test_y_channel: True

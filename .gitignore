@@ -1,5 +1,13 @@
 .DS_Store
 
+# Project-specific
+datasets/
+results/
+experiments/pretrained_models/
+tb_logger/
+wandb/
+*.pth
+*.zip
 
 docs/api
 scripts/__init__.py
