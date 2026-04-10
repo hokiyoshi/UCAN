@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">
-<img width="200" src="logo.png"> <br>
+<img width="200" src="figs/logo.png"> <br>
  UCAN: Unified Convolutional Attention Network  <br>  for Expansive Receptive Fields in Lightweight Super-Resolution</h1>
   <p align="center">
     Cao Thien Tan<sup>1,2,3</sup>
