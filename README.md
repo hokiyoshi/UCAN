@@ -37,6 +37,18 @@ Repo updating...
 
 ## 🛠️ Setup
 
+- Python 3.10+
+- PyTorch 2.0+ + Torchvision 0.15+
+- NVIDIA GPU + [CUDA](https://developer.nvidia.com/cuda-downloads)
+
+```bash
+git clone https://github.com/hokiyoshi/UCAN.git
+conda create -n UCAN python=3.10
+conda activate UCAN
+pip install -r requirements.txt
+python setup.py develop
+```
+
 ## 🗃️ Datasets
 
 Training and testing sets can be downloaded as follows:
@@ -49,7 +61,24 @@ Training and testing sets can be downloaded as follows:
 
 ## 🚀 Training
 
+```bash
+python basicsr/train.py -opt options/Train/train_UCAN_x2.yml
+```
+
 ## 🧪 Testing
+
+Place pretrained weights under `experiments/pretrained_models/`, then run:
+
+```bash
+# x2
+python basicsr/test.py -opt options/Test/test_UCAN_x2.yml
+# x3
+python basicsr/test.py -opt options/Test/test_UCAN_x3.yml
+# x4
+python basicsr/test.py -opt options/Test/test_UCAN_x4.yml
+```
+
+Results are saved to `results/`.
 
 ## 📚 Results
 
@@ -57,4 +86,3 @@ Training and testing sets can be downloaded as follows:
 
 ## 🥂 Acknowledgements
 This work is based on [BasicSR](https://github.com/XPixelGroup/BasicSR), [HiT-SR](https://github.com/XiangZ-0/HiT-SR), [ESC](https://github.com/dslisleedh/ESC) and [MambaIRv2](https://github.com/csguoh/MambaIR). We thank them for their great work and for sharing the code.
-
